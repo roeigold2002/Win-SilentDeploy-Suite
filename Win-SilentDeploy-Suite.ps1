@@ -1,84 +1,82 @@
-# הרצה כמנהל מערכת
+# --- בדיקת הרשאות מנהל ---
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "Please run this script as Administrator!" -ForegroundColor Red
     exit
 }
 
+# --- הגדרות נתיבים ---
+$BaseUrl = "https://github.com/roeigold2002/Win-SilentDeploy-Suite/releases/download/Softwares"
 $InstallPath = "C:\OfflineInstalls"
-if (-not (Test-Path $InstallPath)) { New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null }
 
-# --- רשימת התוכנות והגדרות ---
+if (-not (Test-Path $InstallPath)) { 
+    New-Item -Path $InstallPath -ItemType Directory -Force | Out-Null 
+}
+
+# --- רשימת אפליקציות ופרמטרים (מעודכן לקבצים שלך) ---
 $Apps = @(
-    @{ Name="Visual C++ 2015-2022"; Url="https://aka.ms/vs/17/release/vc_redist.x64.exe"; File="vc_redist.exe"; Args="/quiet /norestart" },
-    @{ Name="DirectX Redist"; Url="https://download.microsoft.com/download/1/7/1/1718CCC4-6315-4D8E-9543-8E28A4E18C4C/directx_Jun2010_redist.exe"; File="directx_redist.exe"; Args="/Q /T:$InstallPath\DX" },
-    @{ Name="Google Chrome"; Url="https://dl.google.com/chrome/install/standalonesetup64.exe"; File="chrome_setup.exe"; Args="/silent /install" },
-    @{ Name="7-Zip"; Url="https://www.7-zip.org/a/7z2401-x64.exe"; File="7z_setup.exe"; Args="/S" },
-    @{ Name="Notepad++"; Url="https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.8.8/npp.8.8.8.Installer.x64.exe"; File="npp_setup.exe"; Args="/S" },
-    @{ Name="Python 3"; Url="https://www.python.org/ftp/python/3.13.4/python-3.13.4-amd64.exe"; File="python_setup.exe"; Args="/quiet InstallAllUsers=1 PrependPath=1" },
-    @{ Name="Acrobat Reader"; Url="https://ardownload2.adobe.com/pub/adobe/reader/win/AcrobatDC/2400320112/AcrobatRDC2400320112_en_US.exe"; File="acrobat_setup.exe"; Args="/sAll /rs" },
-    @{ Name="Telegram"; Url="https://tdesktop.com/win64/current?setup=1"; File="telegram_setup.exe"; Args="/VERYSILENT /SUPPRESSMSGBOXES /ALLUSERS" },
-    @{ Name="WinRAR"; Url="https://www.rarlab.com/rar/winrar-x64-701.exe"; File="winrar_setup.exe"; Args="/S" },
-    @{ Name="OpenOffice"; Url="https://sourceforge.net/projects/openofficeorg.mirror/files/4.1.16/binaries/en-US/Apache_OpenOffice_4.1.16_Win_x86_install_en-US.exe/download"; File="openoffice_setup.exe"; Args="/S" },
-    @{ Name="Tor Browser"; Url="https://www.torproject.org/dist/torbrowser/14.0.5/tor-browser-windows-x86_64-portable-14.0.5.exe"; File="tor_setup.exe"; Args="SPECIAL" }
+    @{ Name="Visual C++"; File="VC_redist.x64.exe"; Args="/quiet /norestart" },
+    @{ Name="Google Chrome"; File="ChromeStandaloneSetup64.exe"; Args="/silent /install" },
+    @{ Name="7-Zip"; File="7z2401-x64.exe"; Args="/S" },
+    @{ Name="Notepad++"; File="npp.8.8.8.Installer.x64.exe"; Args="/S" },
+    @{ Name="Python 3"; File="python-3.13.4-amd64.exe"; Args="/quiet InstallAllUsers=1 PrependPath=1" },
+    @{ Name="Telegram"; File="tsetup-x64.6.5.1.exe"; Args="/VERYSILENT /ALLUSERS" },
+    @{ Name="WinRAR"; File="winrar-x64-701.exe"; Args="/S" },
+    @{ Name="OpenOffice"; File="Apache_OpenOffice_4.1.16_Win_x86_install_en-US.exe"; Args="/S" },
+    @{ Name="Acrobat Reader"; File="Reader_en_install.exe"; Args="/sAll /rs" },
+    @{ Name="Tor Browser"; File="tor-browser-windows-x86_64-portable-15.0.5.exe"; Args="SPECIAL" }
 )
 
-# --- 1. הורדה ---
-Write-Host "--- Starting Downloads ---" -ForegroundColor Cyan
+# --- שלב 1: הורדה מה-Repository שלך ---
+Write-Host "--- Starting Downloads from GitHub Releases ---" -ForegroundColor Cyan
 foreach ($App in $Apps) {
+    $DownloadUrl = "$BaseUrl/$($App.File)"
     Write-Host "Downloading $($App.Name)... " -NoNewline
     try {
-        Invoke-WebRequest -Uri $App.Url -OutFile "$InstallPath\$($App.File)" -ErrorAction Stop
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile "$InstallPath\$($App.File)" -ErrorAction Stop
         Write-Host "Done." -ForegroundColor Green
-    } catch { Write-Host "Failed!" -ForegroundColor Red }
-}
-
-# --- 2. התקנת Runtimes (DirectX & VC) ---
-Write-Host "`n--- Installing System Runtimes ---" -ForegroundColor Cyan
-# DirectX
-if (Test-Path "$InstallPath\directx_redist.exe") {
-    New-Item -Path "$InstallPath\DX" -ItemType Directory -Force | Out-Null
-    Start-Process -FilePath "$InstallPath\directx_redist.exe" -ArgumentList "/Q /T:$InstallPath\DX" -Wait
-    Start-Process -FilePath "$InstallPath\DX\dxsetup.exe" -ArgumentList "/silent" -Wait
-}
-# Visual C++
-Start-Process -FilePath "$InstallPath\vc_redist.exe" -ArgumentList "/quiet /norestart" -Wait
-
-# --- 3. התקנת אפליקציות ---
-Write-Host "`n--- Installing Applications ---" -ForegroundColor Cyan
-foreach ($App in $Apps) {
-    if ($App.Name -match "DirectX" -or $App.Name -match "Visual C++" -or $App.Name -match "Tor Browser") { continue }
-    if (Test-Path "$InstallPath\$($App.File)") {
-        Write-Host "Installing $($App.Name)... " -NoNewline
-        Start-Process -FilePath "$InstallPath\$($App.File)" -ArgumentList $App.Args -Wait
-        Write-Host "Done." -ForegroundColor Green
+    } catch {
+        Write-Host "Failed! Check if file exists in Release." -ForegroundColor Red
     }
 }
 
-# --- 4. טיפול ב-Tor ---
-$TorDest = "C:\Tor"
-if (Test-Path "$InstallPath\tor_setup.exe") {
-    Write-Host "Configuring Tor Browser for all users... " -NoNewline
-    if (-not (Test-Path $TorDest)) { New-Item -Path $TorDest -ItemType Directory -Force | Out-Null }
-    Start-Process -FilePath "$InstallPath\tor_setup.exe" -ArgumentList "/S /D=$TorDest" -Wait
+# --- שלב 2: התקנה שקטה ---
+Write-Host "`n--- Starting Silent Installations ---" -ForegroundColor Cyan
+foreach ($App in $Apps) {
+    $LocalFile = "$InstallPath\$($App.File)"
     
-    $Acl = Get-Acl $TorDest
-    $Acl.SetAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("Users","Modify","ContainerInherit,ObjectInherit","None","Allow")))
-    Set-Acl $TorDest $Acl
-
-    $WshShell = New-Object -ComObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut("C:\Users\Public\Desktop\Tor Browser.lnk")
-    $Shortcut.TargetPath = "$TorDest\Browser\firefox.exe"; $Shortcut.Save()
-    Write-Host "Done." -ForegroundColor Green
+    if (Test-Path $LocalFile) {
+        if ($App.Name -eq "Tor Browser") {
+            # טיפול מיוחד ב-Tor
+            Write-Host "Extracting Tor Browser to C:\Tor... " -NoNewline
+            $TorDest = "C:\Tor"
+            if (-not (Test-Path $TorDest)) { New-Item -Path $TorDest -ItemType Directory -Force | Out-Null }
+            
+            Start-Process -FilePath $LocalFile -ArgumentList "/S /D=$TorDest" -Wait
+            
+            # הרשאות וקיצור דרך
+            $Acl = Get-Acl $TorDest
+            $Acl.SetAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("Users","Modify","ContainerInherit,ObjectInherit","None","Allow")))
+            Set-Acl $TorDest $Acl
+            
+            $WshShell = New-Object -ComObject WScript.Shell
+            $Shortcut = $WshShell.CreateShortcut("C:\Users\Public\Desktop\Tor Browser.lnk")
+            $Shortcut.TargetPath = "$TorDest\Browser\firefox.exe"
+            $Shortcut.Save()
+            Write-Host "Done." -ForegroundColor Green
+        } else {
+            # התקנה רגילה
+            Write-Host "Installing $($App.Name)... " -NoNewline
+            $Process = Start-Process -FilePath $LocalFile -ArgumentList $App.Args -Wait -PassThru
+            Write-Host "Done (Exit Code: $($Process.ExitCode))." -ForegroundColor Green
+        }
+    }
 }
 
-# --- 5. ניקוי סופי (Cleanup) ---
-Write-Host "`n--- Cleaning up installation files ---" -ForegroundColor Cyan
-if (Test-Path $InstallPath) {
-    Remove-Item -Path $InstallPath -Recurse -Force
-    Write-Host "Temp files removed." -ForegroundColor Green
-}
+# --- שלב 3: ניקוי וריסטארט ---
+Write-Host "`nCleaning up installation files... " -NoNewline
+Remove-Item -Path $InstallPath -Recurse -Force
+Write-Host "Done." -ForegroundColor Green
 
-# --- ריסטארט ---
-Write-Host "`nSetup complete. Restarting in 15 seconds..." -ForegroundColor Yellow
+Write-Host "`nAll tasks completed. System will restart in 15 seconds..." -ForegroundColor Yellow
 Start-Sleep -Seconds 15
 Restart-Computer -Force
